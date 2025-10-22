@@ -11,6 +11,9 @@ on:
         required: true
         default: 'v0.1.0'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build binaries
@@ -82,6 +85,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout code
@@ -103,6 +108,8 @@ jobs:
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ steps.get_tag.outputs.tag }}
           name: Release ${{ steps.get_tag.outputs.tag }}
@@ -132,4 +139,3 @@ jobs:
             ./artifacts/vault-recursive-copy-darwin-amd64/vault-recursive-copy-darwin-amd64.tar.gz
             ./artifacts/vault-recursive-copy-darwin-arm64/vault-recursive-copy-darwin-arm64.tar.gz
             ./artifacts/vault-recursive-copy-linux-amd64/vault-recursive-copy-linux-amd64.tar.gz
-          token: ${{ secrets.GITHUB_TOKEN }}
