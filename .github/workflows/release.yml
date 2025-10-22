@@ -1,0 +1,163 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag'
+        required: true
+        default: 'v0.1.0'
+
+jobs:
+  build:
+    name: Build binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+            name: vault-recursive-copy-darwin-amd64
+          - goos: darwin
+            goarch: arm64
+            name: vault-recursive-copy-darwin-arm64
+          - goos: linux
+            goarch: amd64
+            name: vault-recursive-copy-linux-amd64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25.3'
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          go build -ldflags="-s -w" -o ${{ matrix.name }} .
+          chmod +x ${{ matrix.name }}
+
+      - name: Create archive
+        run: |
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            zip ${{ matrix.name }}.zip ${{ matrix.name }}
+          else
+            tar -czf ${{ matrix.name }}.tar.gz ${{ matrix.name }}
+          fi
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.name }}
+          path: |
+            ${{ matrix.name }}
+            ${{ matrix.name }}.tar.gz
+            ${{ matrix.name }}.zip
+          retention-days: 1
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Get release tag
+        id: get_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
+          release_name: Release ${{ steps.get_tag.outputs.tag }}
+          body: |
+            ## Changes
+            
+            Automated release of vault-recursive-copy ${{ steps.get_tag.outputs.tag }}
+            
+            ### Supported Platforms:
+            - macOS (Intel x64)
+            - macOS (Apple Silicon ARM64)  
+            - Linux (x64)
+            
+            ### Installation:
+            1. Download the appropriate binary for your platform
+            2. Extract the archive (if applicable)
+            3. Make the binary executable: `chmod +x vault-recursive-copy-*`
+            4. Move to your PATH or run directly
+            
+            ### Usage:
+            ```bash
+            ./vault-recursive-copy-* --token YOUR_VAULT_TOKEN --addr http://vault-server:8200 --output secrets.json
+            ```
+          draft: false
+          prerelease: false
+
+      - name: Upload Darwin AMD64 Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/vault-recursive-copy-darwin-amd64/vault-recursive-copy-darwin-amd64.tar.gz
+          asset_name: vault-recursive-copy-darwin-amd64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Darwin ARM64 Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/vault-recursive-copy-darwin-arm64/vault-recursive-copy-darwin-arm64.tar.gz
+          asset_name: vault-recursive-copy-darwin-arm64.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Linux AMD64 Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./artifacts/vault-recursive-copy-linux-amd64/vault-recursive-copy-linux-amd64.tar.gz
+          asset_name: vault-recursive-copy-linux-amd64.tar.gz
+          asset_content_type: application/gzip
