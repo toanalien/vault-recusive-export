@@ -38,7 +38,7 @@ jobs:
           go-version: '1.25.3'
 
       - name: Cache Go modules
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/go-build
@@ -68,7 +68,7 @@ jobs:
           fi
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
           path: |
@@ -88,7 +88,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
@@ -102,13 +102,10 @@ jobs:
           fi
 
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_tag.outputs.tag }}
-          release_name: Release ${{ steps.get_tag.outputs.tag }}
+          name: Release ${{ steps.get_tag.outputs.tag }}
           body: |
             ## Changes
             
@@ -131,33 +128,8 @@ jobs:
             ```
           draft: false
           prerelease: false
-
-      - name: Upload Darwin AMD64 Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/vault-recursive-copy-darwin-amd64/vault-recursive-copy-darwin-amd64.tar.gz
-          asset_name: vault-recursive-copy-darwin-amd64.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload Darwin ARM64 Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/vault-recursive-copy-darwin-arm64/vault-recursive-copy-darwin-arm64.tar.gz
-          asset_name: vault-recursive-copy-darwin-arm64.tar.gz
-          asset_content_type: application/gzip
-
-      - name: Upload Linux AMD64 Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./artifacts/vault-recursive-copy-linux-amd64/vault-recursive-copy-linux-amd64.tar.gz
-          asset_name: vault-recursive-copy-linux-amd64.tar.gz
-          asset_content_type: application/gzip
+          files: |
+            ./artifacts/vault-recursive-copy-darwin-amd64/vault-recursive-copy-darwin-amd64.tar.gz
+            ./artifacts/vault-recursive-copy-darwin-arm64/vault-recursive-copy-darwin-arm64.tar.gz
+            ./artifacts/vault-recursive-copy-linux-amd64/vault-recursive-copy-linux-amd64.tar.gz
+          token: ${{ secrets.GITHUB_TOKEN }}
